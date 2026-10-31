@@ -5,7 +5,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 360
     steps:
-      - name: Optimizar Rendimiento Máximo y Apagar Suspensión
+      - name: Optimizar Rendimiento, Contraseña y Mantener Activo
         run: |
           powercfg -s SCHEME_MIN
           net user runneradmin Roblox2026*
@@ -13,7 +13,11 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           
-          # Optimizar efectos visuales para velocidad y fluidez de la interfaz
+          # Evitar que se cierre por inactividad
+          Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name "MaxIdleTime" -Value 0
+          Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name "MaxDisconnectionTime" -Value 0
+          
+          # Optimizar efectos visuales para velocidad y fluidez
           Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00))
           
       - name: Instalar Tailscale
