@@ -5,12 +5,16 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 360
     steps:
-      - name: Optimizar Rendimiento y Apagar Suspensión
+      - name: Optimizar Rendimiento Máximo y Apagar Suspensión
         run: |
           powercfg -s SCHEME_MIN
+          net user runneradmin Roblox2026*
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          
+          # Optimizar efectos visuales para velocidad y fluidez de la interfaz
+          Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00))
           
       - name: Instalar Tailscale
         run: |
@@ -21,7 +25,7 @@ jobs:
         run: |
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }}
 
-      - name: Mostrar IP de Tailscale y Descargar Roblox Studio
+      - name: Mostrar IP y Descargar Studio con Máxima Prioridad
         run: |
           & "C:\Program Files\Tailscale\tailscale.exe" ip -4
           $installerUrl = "http://setup.roblox.com/RobloxStudioLauncherBeta.exe"
