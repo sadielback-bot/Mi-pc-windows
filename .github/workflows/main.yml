@@ -75,9 +75,20 @@ jobs:
 
       - name: Herramientas extra
         if: ${{ inputs.install_tools }}
+        continue-on-error: true
         shell: pwsh
         run: |
-          choco install -y --no-progress googlechrome vscode git 7zip python nodejs-lts
+          choco install -y --no-progress vscode git 7zip python nodejs-lts
+          exit 0
+
+      - name: Instalar Roblox Studio (experimental, puede fallar)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $exe = "$env:RUNNER_TEMP\RobloxStudioLauncherBeta.exe"
+          Invoke-WebRequest "https://setup.rbxcdn.com/RobloxStudioLauncherBeta.exe" -OutFile $exe
+          Start-Process $exe -ArgumentList "-silent" -Wait
+          Write-Host "Roblox Studio instalado (si no aparece en el menu Inicio, descargalo desde roblox.com/create dentro de la PC)."
 
       - name: Mostrar datos de conexión
         shell: pwsh
