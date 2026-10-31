@@ -19,11 +19,11 @@ jobs:
 
       - name: Iniciar Tailscale
         run: |
-          C:\Program\ Files\Tailscale\tailscale.exe up --unattended
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }}
 
       - name: Mostrar IP de Tailscale y Descargar Roblox Studio
         run: |
-          C:\Program\ Files\Tailscale\tailscale.exe ip -4
+          & "C:\Program Files\Tailscale\tailscale.exe" ip -4
           $installerUrl = "http://setup.roblox.com/RobloxStudioLauncherBeta.exe"
           $output = "$env:TEMP\RobloxStudioInstaller.exe"
           Invoke-WebRequest -Uri $installerUrl -OutFile $output
