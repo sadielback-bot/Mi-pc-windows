@@ -1,107 +1,30 @@
-name: Windows PC (Tailscale login por enlace)
-
-on:
-  workflow_dispatch:
-    inputs:
-      hostname:
-        description: "Nombre de la PC en Tailscale"
-        default: "gh-windows-pc"
-      install_tools:
-        description: "Instalar herramientas extra (Chrome, VS Code, Git, 7zip, Python, Node)"
-        type: boolean
-        default: false
-
-permissions:
-  contents: read
-
+name: RDP-RobloxStudio
+on: workflow_dispatch
 jobs:
-  pc:
-    # Repo PUBLICO: 4 vCPU / 16 GB RAM (gratis)
+  build:
     runs-on: windows-latest
     timeout-minutes: 360
-
     steps:
-      - name: Instalar Tailscale
-        shell: pwsh
+      - name: Optimizar Rendimiento y Apagar Suspensión
         run: |
-          $msi = "$env:RUNNER_TEMP\tailscale.msi"
-          Invoke-WebRequest "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile $msi
-          Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /quiet /norestart" -Wait
-          Start-Service Tailscale
-          Start-Sleep -Seconds 5
-
-      - name: Login de Tailscale (abre el enlace que aparece en el log)
-        shell: pwsh
-        env:
-          HOSTNAME_IN: ${{ inputs.hostname }}
-        run: |
-          $ts  = "C:\Program Files\Tailscale\tailscale.exe"
-          $out = "$env:RUNNER_TEMP\ts-out.log"
-          $err = "$env:RUNNER_TEMP\ts-err.log"
-          $p = Start-Process $ts -ArgumentList "up","--unattended","--hostname=$env:HOSTNAME_IN" `
-                 -RedirectStandardOutput $out -RedirectStandardError $err -PassThru -NoNewWindow
-
-          $deadline = (Get-Date).AddMinutes(15)
-          $shown = $false
-          while (-not $p.HasExited -and (Get-Date) -lt $deadline) {
-            if (-not $shown) {
-              $txt = (Get-Content $out, $err -ErrorAction SilentlyContinue) -join "`n"
-              if ($txt -match "(https://login\.tailscale\.com/a/\S+)") {
-                Write-Host "=============================================="
-                Write-Host " ABRE ESTE ENLACE EN TU CELULAR Y APRUEBA:"
-                Write-Host " $($Matches[1])"
-                Write-Host "=============================================="
-                $shown = $true
-              }
-            }
-            Start-Sleep -Seconds 3
-          }
-          if (-not $p.HasExited) { throw "No aprobaste el login a tiempo (15 min)." }
-          & $ts status
-
-      - name: Activar Escritorio Remoto (RDP) y fijar contraseña
-        shell: pwsh
-        env:
-          RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
-        run: |
-          if (-not $env:RDP_PASSWORD) { throw "Falta el secret RDP_PASSWORD" }
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0
+          powercfg -s SCHEME_MIN
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          New-NetFirewallRule -DisplayName "RDP-Tailscale" -Direction Inbound -Protocol TCP -LocalPort 3389 -Action Allow -Profile Any -ErrorAction SilentlyContinue
-          net user runneradmin "$env:RDP_PASSWORD"
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "runneradmin" -ErrorAction SilentlyContinue
-          Set-Service -Name TermService -StartupType Automatic
-          Restart-Service -Name TermService -Force
-
-      - name: Herramientas extra
-        if: ${{ inputs.install_tools }}
-        continue-on-error: true
-        shell: pwsh
+          
+      - name: Instalar Tailscale
         run: |
-          choco install -y --no-progress vscode git 7zip python nodejs-lts
-          exit 0
+          powershell -Command "Invoke-WebRequest -Uri https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe -OutFile tailscale-setup.exe"
+          Start-Process -FilePath "tailscale-setup.exe" -ArgumentList "/quiet" -Wait
 
-      - name: Mostrar datos de conexión
-        shell: pwsh
+      - name: Iniciar Tailscale sin Llave
         run: |
-          $ts = "C:\Program Files\Tailscale\tailscale.exe"
-          $ip = & $ts ip -4
-          Write-Host "=============================================="
-          Write-Host " IP Tailscale : $ip"
-          Write-Host " Usuario      : runneradmin"
-          Write-Host " Contraseña   : (tu secret RDP_PASSWORD)"
-          Write-Host "=============================================="
+          & "C:\Program Files\Tailscale\tailscale.exe" up --netfilter-mode=off
 
-      - name: Mantener la PC encendida
-        continue-on-error: true
-        shell: pwsh
+      - name: Descargar e Instalar Roblox Studio Automáticamente
         run: |
-          $ErrorActionPreference = 'Continue'
-          $end = (Get-Date).AddMinutes(330)
-          $n = 0
-          while ((Get-Date) -lt $end) {
-            if (Test-Path "$env:USERPROFILE\stop.txt") { break }
-            Start-Sleep -Seconds 30
-            $n++
-            if ($n % 10 -eq 0) { Write-Host "PC encendida: $(Get-Date -Format 'HH:mm')" }
-          }
+          $installerUrl = "http://setup.roblox.com/RobloxStudioLauncherBeta.exe"
+          $output = "$env:TEMP\RobloxStudioInstaller.exe"
+          Invoke-WebRequest -Uri $installerUrl -OutFile $output
+          Start-Process -FilePath $output -ArgumentList "-install" -Wait
+          
