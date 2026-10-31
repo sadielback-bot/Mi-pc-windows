@@ -9,7 +9,7 @@ on:
       install_tools:
         description: "Instalar herramientas extra (Chrome, VS Code, Git, 7zip, Python, Node)"
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read
@@ -80,15 +80,6 @@ jobs:
         run: |
           choco install -y --no-progress vscode git 7zip python nodejs-lts
           exit 0
-
-      - name: Instalar Roblox Studio (experimental, puede fallar)
-        continue-on-error: true
-        shell: pwsh
-        run: |
-          $exe = "$env:RUNNER_TEMP\RobloxStudioLauncherBeta.exe"
-          Invoke-WebRequest "https://setup.rbxcdn.com/RobloxStudioLauncherBeta.exe" -OutFile $exe
-          Start-Process $exe -ArgumentList "-silent" -Wait
-          Write-Host "Roblox Studio instalado (si no aparece en el menu Inicio, descargalo desde roblox.com/create dentro de la PC)."
 
       - name: Mostrar datos de conexión
         shell: pwsh
