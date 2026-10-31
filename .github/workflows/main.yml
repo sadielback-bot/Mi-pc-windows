@@ -93,10 +93,15 @@ jobs:
           Write-Host "=============================================="
 
       - name: Mantener la PC encendida
+        continue-on-error: true
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Continue'
           $end = (Get-Date).AddMinutes(330)
+          $n = 0
           while ((Get-Date) -lt $end) {
             if (Test-Path "$env:USERPROFILE\stop.txt") { break }
             Start-Sleep -Seconds 30
+            $n++
+            if ($n % 10 -eq 0) { Write-Host "PC encendida: $(Get-Date -Format 'HH:mm')" }
           }
