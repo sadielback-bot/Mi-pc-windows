@@ -1,4 +1,4 @@
-name: Windows PC (Tailscale + RDP)
+name: Windows PC (Tailscale login por enlace)
 
 on:
   workflow_dispatch:
@@ -6,10 +6,6 @@ on:
       hostname:
         description: "Nombre de la PC en Tailscale"
         default: "gh-windows-pc"
-      auto_restart:
-        description: "Relanzar automáticamente al terminar las ~6h (el disco se reinicia)"
-        type: boolean
-        default: false
       install_tools:
         description: "Instalar herramientas extra (Chrome, VS Code, Git, 7zip, Python, Node)"
         type: boolean
@@ -17,24 +13,51 @@ on:
 
 permissions:
   contents: read
-  actions: write   # necesario solo para auto_restart
 
 jobs:
   pc:
-    # Repo PÚBLICO: windows-latest = 4 vCPU / 16 GB RAM / 14 GB SSD (gratis)
-    # Repo PRIVADO gratis: 2 vCPU / 7 GB RAM.
-    # Si tienes plan de pago con "larger runners", cambia por tu etiqueta, ej: windows-2022-64core
+    # Repo PUBLICO: 4 vCPU / 16 GB RAM (gratis)
     runs-on: windows-latest
-    timeout-minutes: 360   # límite máximo de GitHub por job
+    timeout-minutes: 360
 
     steps:
-      - name: Conectar a Tailscale
-        uses: tailscale/github-action@v3
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-          hostname: ${{ inputs.hostname }}
+      - name: Instalar Tailscale
+        shell: pwsh
+        run: |
+          $msi = "$env:RUNNER_TEMP\tailscale.msi"
+          Invoke-WebRequest "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile $msi
+          Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /quiet /norestart" -Wait
+          Start-Service Tailscale
+          Start-Sleep -Seconds 5
+
+      - name: Login de Tailscale (abre el enlace que aparece en el log)
+        shell: pwsh
+        env:
+          HOSTNAME_IN: ${{ inputs.hostname }}
+        run: |
+          $ts  = "C:\Program Files\Tailscale\tailscale.exe"
+          $out = "$env:RUNNER_TEMP\ts-out.log"
+          $err = "$env:RUNNER_TEMP\ts-err.log"
+          $p = Start-Process $ts -ArgumentList "up","--unattended","--hostname=$env:HOSTNAME_IN" `
+                 -RedirectStandardOutput $out -RedirectStandardError $err -PassThru -NoNewWindow
+
+          $deadline = (Get-Date).AddMinutes(15)
+          $shown = $false
+          while (-not $p.HasExited -and (Get-Date) -lt $deadline) {
+            if (-not $shown) {
+              $txt = (Get-Content $out, $err -ErrorAction SilentlyContinue) -join "`n"
+              if ($txt -match "(https://login\.tailscale\.com/a/\S+)") {
+                Write-Host "=============================================="
+                Write-Host " ABRE ESTE ENLACE EN TU CELULAR Y APRUEBA:"
+                Write-Host " $($Matches[1])"
+                Write-Host "=============================================="
+                $shown = $true
+              }
+            }
+            Start-Sleep -Seconds 3
+          }
+          if (-not $p.HasExited) { throw "No aprobaste el login a tiempo (15 min)." }
+          & $ts status
 
       - name: Activar Escritorio Remoto (RDP) y fijar contraseña
         shell: pwsh
@@ -44,7 +67,6 @@ jobs:
           if (-not $env:RDP_PASSWORD) { throw "Falta el secret RDP_PASSWORD" }
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          # Permitir RDP también por la interfaz de Tailscale
           New-NetFirewallRule -DisplayName "RDP-Tailscale" -Direction Inbound -Protocol TCP -LocalPort 3389 -Action Allow -Profile Any -ErrorAction SilentlyContinue
           net user runneradmin "$env:RDP_PASSWORD"
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "runneradmin" -ErrorAction SilentlyContinue
@@ -66,23 +88,13 @@ jobs:
           Write-Host " IP Tailscale : $ip"
           Write-Host " Usuario      : runneradmin"
           Write-Host " Contraseña   : (tu secret RDP_PASSWORD)"
-          Write-Host " Conecta con Windows App -> Add PC -> $ip"
           Write-Host "=============================================="
-          Get-CimInstance Win32_ComputerSystem | Select-Object NumberOfLogicalProcessors, @{n='RAM_GB';e={[math]::Round($_.TotalPhysicalMemory/1GB,1)}}
 
       - name: Mantener la PC encendida
         shell: pwsh
         run: |
-          $end = (Get-Date).AddMinutes(350)
+          $end = (Get-Date).AddMinutes(330)
           while ((Get-Date) -lt $end) {
-            if (Test-Path "$env:USERPROFILE\stop.txt") { Write-Host "stop.txt encontrado, apagando."; break }
+            if (Test-Path "$env:USERPROFILE\stop.txt") { break }
             Start-Sleep -Seconds 30
           }
-
-      - name: Relanzar (opcional)
-        if: ${{ inputs.auto_restart }}
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh workflow run "${{ github.workflow }}" --repo "${{ github.repository }}" -f hostname="${{ inputs.hostname }}" -f auto_restart=true -f install_tools=${{ inputs.install_tools }}
